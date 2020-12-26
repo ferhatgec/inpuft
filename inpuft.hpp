@@ -101,6 +101,8 @@ Inpuft::GetInput(bool echo) {
 				std::cout << "\b \b" << std::flush;
 			
 				data.pop_back();
+				
+				cursor.x--;
 			}
 			
 			break;
@@ -144,6 +146,8 @@ Inpuft::GetInput(bool echo) {
 		default:
 		{
 			data.push_back(ch);
+			
+			cursor.x++;
 			
 			std::cout << ch << std::flush;
 			
