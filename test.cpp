@@ -3,10 +3,14 @@
 #include "inpuft.hpp"
 
 int main(int argc, char** argv) {
-    Inpuft get(false);
+    Inpuft input;
 
-    std::cout << "\nData: " << get.data << "\n";
-    std::cout << "Cursor position(x) : " << get.cursor.x << "\n";
+   
+    input.InitFile((std::string)getenv("PWD") + "/history");
+       
+     input.Init(false); 
+
+    std::cout << input.data << " " << input.current_line << "\n";
     
     return 0;
 }

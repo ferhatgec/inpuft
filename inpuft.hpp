@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -32,10 +33,11 @@
 
 #define SPACE       32
 
-#define PUT(str)  std::cout << str;
+#define PUT(str)  std::cout << str << std::flush;
 #define INPUT(ch) ch = getchar();
 
-struct termios _old, _new;
+static struct termios _new,
+                      _old;
 
 /* For initialize cursor position */ 
 typedef struct {
@@ -56,10 +58,14 @@ public:
 	pos_t cursor = GetPosition();
 
 	char ch;
-	std::string data;
+	
+	std::string data,
+                history_file;
+	
+	unsigned total_line,
+             current_line;
 public:
-	Inpuft(); /* Just initialize */
-	Inpuft(bool echo); /* With input as string */
+	void Init(bool echo); /* With input as string */
 
 	~Inpuft(); 
 	
@@ -71,9 +77,16 @@ public:
 	void ResetTermios();
 	
 	void BuffBack(unsigned int i);
+	
+	/* For history */ 
+	void InitFile(std::string file);
+	
+	unsigned    GetTotalHistoryLine();
+	std::string GetSpecificHistoryLine(unsigned line);
 };
 
-Inpuft::Inpuft(bool echo) {
+void
+Inpuft::Init(bool echo) {
 	iter = std::find(unsupported_terms.begin(), unsupported_terms.end(), getenv("TERM")); 
 	
 	if(iter != unsupported_terms.end()) { 
@@ -94,29 +107,24 @@ Inpuft::~Inpuft() {
 
 void
 Inpuft::GetInput(bool echo, bool unsupported) {
-	tcgetattr(0, &_old);
-    _new = _old;
-    _new.c_lflag &= ~ICANON;
-    _new.c_lflag &= ~ECHO;
-    tcsetattr(0, TCSANOW, &_new);
-	fflush(stdout);
+	InitTermios(false);
 	
 	INPUT(ch)
 
 	switch(ch) {
 		case SPACE:
 		{
-			std::cout << " " << std::flush;
+			PUT(" ")
 			
 			data.append(" ");
 			
 			break;
 		}
 	
-		case __BACKSPACE || BACKSPACE:
+		case BACKSPACE:
 		{
 			if(data.length() > 0) {
-				std::cout << "\b \b" << std::flush;
+				PUT("\b \b")
 			
 				data.pop_back();
 				
@@ -129,31 +137,54 @@ Inpuft::GetInput(bool echo, bool unsupported) {
 		
 		case ARROW_LEFT:
 		{
+			PUT("")
 			/* Ignore */
 			break;
 		}
 		
 		case ARROW_RIGHT:
 		{
+			PUT("")
 			/* Ignore */
 			break;
 		}
 		
-		case ESCAPE:
+		case ARROW_UP:
 		{
 			if(unsupported == true) break;
 			
-			ch = getchar();
-        	ch = getchar();
-            
-			if(ch == ARROW_UP) {
+			if(current_line != 0) {
+				current_line--;
+				
 				BuffBack(data.length());
+				
+				data = GetSpecificHistoryLine(current_line);
+				
+				PUT(data)
+				/* TODO:
+				   * Colorize if fetched data is available on system
+				   * Add Colorized library.
+				*/ 
 			}
+			
+			break;
+		}
 		
-			if(ch == ARROW_DOWN) {
+		case ARROW_DOWN:
+		{
+			PUT("")
+			if(unsupported == true) break;
+			
+			if(current_line < total_line) {
+				current_line++;
+			
 				BuffBack(data.length());
+				
+				data = GetSpecificHistoryLine(current_line);
+				
+				PUT(data)
 			}
-
+				
 			break;
 		}
 		
@@ -169,13 +200,13 @@ Inpuft::GetInput(bool echo, bool unsupported) {
 			
 			cursor.x++;
 			
-			std::cout << ch << std::flush;
+			PUT(ch)
 			
 			break;
 		}
 	}
 
-    tcsetattr(0, TCSANOW, &_old);
+	
 }
 
 void
@@ -202,11 +233,13 @@ Inpuft::InitTermios(bool echo) {
     _new.c_lflag &= ~ICANON;
     _new.c_lflag &= ~ECHO;
     tcsetattr(0, TCSANOW, &_new);
+
+	_new.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 }
 	
 void
 Inpuft::ResetTermios() {
-    tcsetattr(0, TCSANOW, &_old);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &_old);
 }
 
 void
@@ -214,4 +247,50 @@ Inpuft::BuffBack(unsigned int i) {
 	for(unsigned f = 0; f < i; f++) {
 		std::cout << "\b \b" << std::flush;				
 	}
+}
+
+void
+Inpuft::InitFile(std::string file) {
+	history_file = file;
+	total_line   = GetTotalHistoryLine();
+	current_line = GetTotalHistoryLine();
+}
+
+unsigned 
+Inpuft::GetTotalHistoryLine() {
+	/* TODO:
+	  Check file[0] to if is a file (foo_history.txt) or directory (/home/foo/foo_history.txt) 
+	*/
+	std::ifstream history_stream(history_file);
+	
+	std::string line;
+	unsigned i;
+	
+	for (i = 0; std::getline(history_stream, line); ++i)
+    ;
+
+	history_stream.close();
+	
+    return i;	
+}
+
+std::string 
+Inpuft::GetSpecificHistoryLine(unsigned line) {
+	std::ifstream history_stream(history_file);
+	
+	unsigned __line = 0;
+	
+	std::string data;
+	
+	while(getline(history_stream, data)) {
+		if(line == __line) {
+			return data;
+		}
+		
+		__line++;
+	}
+
+	history_stream.close();
+	
+	return data;
 }
