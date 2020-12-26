@@ -5,8 +5,10 @@
 #
 # */
 
+#include <algorithm>
 #include <iostream>
 #include <string>
+#include <vector>
 #include <unistd.h>
 #include <termios.h>
 
@@ -44,6 +46,13 @@ public:
 
 class Inpuft {
 public:
+	std::vector<std::string> unsupported_terms = {
+		"emacs",
+		"xterm-256color",
+	};
+	
+	std::vector<std::string>::iterator iter;
+	
 	pos_t cursor = GetPosition();
 
 	char ch;
@@ -54,7 +63,7 @@ public:
 
 	~Inpuft(); 
 	
-	void GetInput(bool echo);
+	void GetInput(bool echo, bool unsupported);
 	void SetPosition(pos_t pos);
 	pos_t GetPosition();
 	
@@ -65,9 +74,18 @@ public:
 };
 
 Inpuft::Inpuft(bool echo) {
-	do {
-		GetInput(echo);
-	} while(ch != '\n');
+	iter = std::find(unsupported_terms.begin(), unsupported_terms.end(), getenv("TERM")); 
+	
+	if(iter != unsupported_terms.end()) { 
+    	/* Arrow keys detection not supported for unsupported term/s */ 
+    	do {
+			GetInput(echo, true);
+		} while(ch != '\n');
+	} else {
+		do {
+			GetInput(echo, false);
+		} while(ch != '\n');
+	}
 }
 
 Inpuft::~Inpuft() {
@@ -75,7 +93,7 @@ Inpuft::~Inpuft() {
 }
 
 void
-Inpuft::GetInput(bool echo) {
+Inpuft::GetInput(bool echo, bool unsupported) {
 	tcgetattr(0, &_old);
     _new = _old;
     _new.c_lflag &= ~ICANON;
@@ -123,6 +141,8 @@ Inpuft::GetInput(bool echo) {
 		
 		case ESCAPE:
 		{
+			if(unsupported == true) break;
+			
 			ch = getchar();
         	ch = getchar();
             
